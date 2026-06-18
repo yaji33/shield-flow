@@ -4,30 +4,15 @@ import { useReadContract, useWriteContract, useAccount } from "wagmi";
 import { sepolia } from "wagmi/chains";
 import { ShieldFlowEscrowABI } from "@/lib/contracts/abis";
 import { CONTRACT_ADDRESSES } from "@/lib/contracts/addresses";
+import { encryptUint64Batch } from "@/lib/fhe/fhevm";
+export {
+  EscrowStatus,
+  MilestoneStatus,
+  type EscrowStatusKey,
+} from "@/lib/hooks/escrow-types";
 
 const CONTRACT_ADDRESS = CONTRACT_ADDRESSES.sepolia.ShieldFlowEscrow;
 
-// ─── EscrowStatus enum (mirrors Solidity) ────────────────────────────────────
-export const EscrowStatus = {
-  Pending: 0,
-  Active: 1,
-  Completed: 2,
-  Disputed: 3,
-  Cancelled: 4,
-} as const;
-
-export type EscrowStatusKey = keyof typeof EscrowStatus;
-
-// ─── MilestoneStatus enum ─────────────────────────────────────────────────────
-export const MilestoneStatus = {
-  Pending: 0,
-  InProgress: 1,
-  Approved: 2,
-  Released: 3,
-  Disputed: 4,
-} as const;
-
-// ─── Read: getEscrowInfo ──────────────────────────────────────────────────────
 export function useGetEscrow(escrowId: bigint | undefined) {
   return useReadContract({
     address: CONTRACT_ADDRESS,
@@ -35,11 +20,13 @@ export function useGetEscrow(escrowId: bigint | undefined) {
     functionName: "getEscrowInfo",
     args: escrowId !== undefined ? [escrowId] : undefined,
     chainId: sepolia.id,
-    query: { enabled: escrowId !== undefined },
+    query: {
+      enabled: escrowId !== undefined,
+      refetchInterval: 12_000,
+    },
   });
 }
 
-// ─── Read: getMilestone ───────────────────────────────────────────────────────
 export function useGetMilestone(
   escrowId: bigint | undefined,
   milestoneIndex: number,
@@ -49,15 +36,15 @@ export function useGetMilestone(
     abi: ShieldFlowEscrowABI,
     functionName: "getMilestone",
     args:
-      escrowId !== undefined
-        ? [escrowId, milestoneIndex]
-        : undefined,
+      escrowId !== undefined ? [escrowId, milestoneIndex] : undefined,
     chainId: sepolia.id,
-    query: { enabled: escrowId !== undefined },
+    query: {
+      enabled: escrowId !== undefined,
+      refetchInterval: 12_000,
+    },
   });
 }
 
-// ─── Read: nextEscrowId ───────────────────────────────────────────────────────
 export function useNextEscrowId() {
   return useReadContract({
     address: CONTRACT_ADDRESS,
@@ -67,25 +54,8 @@ export function useNextEscrowId() {
   });
 }
 
-// ─── Read: getUserEscrows (derived — reads all IDs up to nextEscrowId) ────────
-export function useGetUserEscrows(userAddress: `0x${string}` | undefined) {
-  const { data: nextId } = useNextEscrowId();
+export { useUserEscrows, useEscrowDashboardStats } from "@/lib/hooks/use-user-escrows";
 
-  // NOTE: The contract does not have an on-chain index of escrows per user.
-  // A production implementation would use event logs (EscrowCreated) filtered
-  // by client/contractor address. This hook returns a placeholder.
-  // TODO: Replace with viem getLogs on EscrowCreated event for userAddress.
-  void nextId;
-  void userAddress;
-
-  return {
-    data: [] as bigint[],
-    isLoading: false,
-    error: null,
-  };
-}
-
-// ─── Write: createEscrow ──────────────────────────────────────────────────────
 export function useCreateEscrow() {
   const { writeContractAsync, isPending, error } = useWriteContract();
 
@@ -112,30 +82,39 @@ export function useCreateEscrow() {
   return { createEscrow, isPending, error };
 }
 
-// ─── Write: deposit ───────────────────────────────────────────────────────────
 export function useDeposit() {
   const { writeContractAsync, isPending, error } = useWriteContract();
+  const { address } = useAccount();
 
   const deposit = async (params: {
     escrowId: bigint;
-    // TODO: integrate fhEVM SDK encrypt() call here — encryptedTotal (externalEuint64)
-    encryptedTotal: bigint;
-    // TODO: integrate fhEVM SDK encrypt() call here — encMilestoneAmts (externalEuint64[])
-    encMilestoneAmts: bigint[];
-    inputProof: `0x${string}`;
+    totalWei: bigint;
+    milestoneAmountsWei: bigint[];
     value?: bigint;
   }) => {
+    if (!address) throw new Error("Wallet not connected");
+
+    const encryptedValues = [params.totalWei, ...params.milestoneAmountsWei];
+    const { handlesHex, inputProof } = await encryptUint64Batch({
+      contractAddress: CONTRACT_ADDRESS,
+      userAddress: address,
+      values: encryptedValues,
+    });
+
+    const [encryptedTotal, ...encMilestoneAmts] = handlesHex;
+
     return writeContractAsync({
       address: CONTRACT_ADDRESS,
       abi: ShieldFlowEscrowABI,
       functionName: "deposit",
       args: [
         params.escrowId,
-        params.encryptedTotal,
-        params.encMilestoneAmts,
-        params.inputProof,
+        encryptedTotal,
+        encMilestoneAmts,
+        inputProof,
+        params.milestoneAmountsWei,
       ],
-      value: params.value,
+      value: params.value ?? params.totalWei,
       chainId: sepolia.id,
     });
   };
@@ -143,7 +122,6 @@ export function useDeposit() {
   return { deposit, isPending, error };
 }
 
-// ─── Write: releaseMilestone ──────────────────────────────────────────────────
 export function useReleaseMilestone() {
   const { writeContractAsync, isPending, error } = useWriteContract();
 
@@ -163,7 +141,7 @@ export function useReleaseMilestone() {
   return { releaseMilestone, isPending, error };
 }
 
-// ─── Write: approveMilestone ──────────────────────────────────────────────────
+// ─── Write: approveMilestone ───────  ───────────
 export function useApproveMilestone() {
   const { writeContractAsync, isPending, error } = useWriteContract();
 
@@ -183,7 +161,6 @@ export function useApproveMilestone() {
   return { approveMilestone, isPending, error };
 }
 
-// ─── Write: submitMilestone ───────────────────────────────────────────────────
 export function useSubmitMilestone() {
   const { writeContractAsync, isPending, error } = useWriteContract();
 
@@ -203,7 +180,22 @@ export function useSubmitMilestone() {
   return { submitMilestone, isPending, error };
 }
 
-// ─── Write: cancelEscrow ──────────────────────────────────────────────────────
+export function useWithdrawReleased() {
+  const { writeContractAsync, isPending, error } = useWriteContract();
+
+  const withdrawReleased = async (escrowId: bigint) => {
+    return writeContractAsync({
+      address: CONTRACT_ADDRESS,
+      abi: ShieldFlowEscrowABI,
+      functionName: "withdrawReleased",
+      args: [escrowId],
+      chainId: sepolia.id,
+    });
+  };
+
+  return { withdrawReleased, isPending, error };
+}
+
 export function useCancelEscrow() {
   const { writeContractAsync, isPending, error } = useWriteContract();
   const { address } = useAccount();
