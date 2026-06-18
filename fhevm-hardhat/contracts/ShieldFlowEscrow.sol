@@ -9,61 +9,53 @@ import {ZamaEthereumConfig} from "@fhevm/solidity/config/ZamaConfig.sol";
  * @notice Confidential multi-party escrow with encrypted milestone amounts.
  *         Client, contractor, and optional auditor interact with fully encrypted
  *         balances and milestone allocations via Zama FHEVM.
- *
- * Phase 1: createEscrow, deposit, basic milestone release, ACL grants.
- * Phase 2: FHE condition checks, time-based logic, multi-sig approvals.
- * Phase 3: Auditor access, dispute resolution hooks.
  */
 contract ShieldFlowEscrow is ZamaEthereumConfig {
-    // ─── Enums ───────────────────────────────────────────────────────────────
 
     enum EscrowStatus {
-        Pending,    // created, awaiting deposit
-        Active,     // funded, milestones in progress
-        Completed,  // all milestones released
-        Disputed,   // under arbitration
-        Cancelled   // refunded / aborted
+        Pending,    
+        Active,     
+        Completed,  
+        Disputed,   
+        Cancelled   
     }
 
     enum MilestoneStatus {
-        Pending,    // not yet started
-        InProgress, // work submitted, awaiting approval
-        Approved,   // client approved — ready for release
-        Released,   // funds sent to contractor
-        Disputed    // under review
+        Pending,    
+        InProgress, 
+        Approved,  
+        Released, 
+        Disputed
     }
 
-    // ─── Structs ─────────────────────────────────────────────────────────────
-
     struct Milestone {
-        euint64        encryptedAmount;   // encrypted ETH amount (in wei, scaled to uint64)
-        uint64         deadline;          // Unix timestamp deadline (plaintext for on-chain time checks)
+        euint64         encryptedAmount;  
+        uint256         plainAmountWei;    
+        uint64          deadline; 
         MilestoneStatus status;
-        bool           clientApproved;
-        bool           contractorSubmitted;
+        bool            clientApproved;
+        bool            contractorSubmitted;
     }
 
     struct Escrow {
         address        client;
         address        contractor;
-        address        auditor;           // optional — address(0) if none
-        euint64        totalDeposit;      // encrypted total deposit
-        euint64        releasedAmount;    // encrypted cumulative released
+        address        auditor;            // optional
+        euint64        totalDeposit;      
+        euint64        releasedAmount;    
+        uint256        totalDepositWei;
+        uint256        releasedWei; 
+        uint256        pendingWithdrawal;
         EscrowStatus   status;
         uint256        createdAt;
         uint8          milestoneCount;
         mapping(uint8 => Milestone) milestones;
     }
 
-    // ─── State ────────────────────────────────────────────────────────────────
-
     uint256 private _nextEscrowId;
 
     mapping(uint256 => Escrow) private _escrows;
 
-    // ─── Events ───────────────────────────────────────────────────────────────
-    // NOTE: No encrypted handles emitted — emitting handles in public events leaks
-    // ciphertext references. Only plaintext metadata is emitted.
 
     event EscrowCreated(
         uint256 indexed escrowId,
@@ -72,21 +64,21 @@ contract ShieldFlowEscrow is ZamaEthereumConfig {
         uint8 milestoneCount
     );
 
-    event EscrowDeposited(uint256 indexed escrowId);
+    event EscrowDeposited(uint256 indexed escrowId, uint256 totalWei);
 
     event MilestoneSubmitted(uint256 indexed escrowId, uint8 milestoneIndex);
 
     event MilestoneApproved(uint256 indexed escrowId, uint8 milestoneIndex);
 
-    event MilestoneReleased(uint256 indexed escrowId, uint8 milestoneIndex);
+    event MilestoneReleased(uint256 indexed escrowId, uint8 milestoneIndex, uint256 amountWei);
+
+    event FundsWithdrawn(uint256 indexed escrowId, address indexed contractor, uint256 amountWei);
 
     event EscrowCompleted(uint256 indexed escrowId);
 
     event EscrowCancelled(uint256 indexed escrowId);
 
     event AuditorGranted(uint256 indexed escrowId, address auditor);
-
-    // ─── Modifiers ────────────────────────────────────────────────────────────
 
     modifier onlyClient(uint256 escrowId) {
         require(_escrows[escrowId].client == msg.sender, "ShieldFlow: caller is not client");
@@ -111,16 +103,8 @@ contract ShieldFlowEscrow is ZamaEthereumConfig {
         _;
     }
 
-    // ─── Core Functions ───────────────────────────────────────────────────────
+    // Core Functions 
 
-    /**
-     * @notice Create a new confidential escrow with up to 10 milestones.
-     * @param contractor    Address of the service provider.
-     * @param auditor       Optional auditor address (pass address(0) for none).
-     * @param milestoneCount Number of milestones (1–10).
-     * @param deadlines     Array of Unix timestamps, one per milestone.
-     * @return escrowId     The newly created escrow identifier.
-     */
     function createEscrow(
         address contractor,
         address auditor,
@@ -151,61 +135,57 @@ contract ShieldFlowEscrow is ZamaEthereumConfig {
         emit EscrowCreated(escrowId, msg.sender, contractor, milestoneCount);
     }
 
-    /**
-     * @notice Deposit encrypted ETH amounts per milestone into the escrow.
-     *         The caller must provide an encrypted total and per-milestone amounts.
-     *         All amounts are encrypted — the contract stores ciphertext handles only.
-     * @param escrowId          The escrow to fund.
-     * @param encryptedTotal    Encrypted total deposit (externalEuint64 handle).
-     * @param encMilestoneAmts  Array of encrypted amounts per milestone.
-     * @param inputProof        ZK proof authorizing these encrypted inputs.
-     *
-     * NOTE: encMilestoneAmts.length must equal the escrow's milestoneCount.
-     *       All amounts share a single inputProof batch (multi-add pattern).
-     */
     function deposit(
         uint256 escrowId,
         externalEuint64 encryptedTotal,
         externalEuint64[] calldata encMilestoneAmts,
-        bytes calldata inputProof
+        bytes calldata inputProof,
+        uint256[] calldata milestoneAmountsWei
     ) external payable onlyClient(escrowId) {
         Escrow storage e = _escrows[escrowId];
         require(e.status == EscrowStatus.Pending, "ShieldFlow: already funded");
         require(encMilestoneAmts.length == e.milestoneCount, "ShieldFlow: milestone amount count mismatch");
+        require(milestoneAmountsWei.length == e.milestoneCount, "ShieldFlow: plaintext amount count mismatch");
+        require(msg.value > 0, "ShieldFlow: must send ETH");
 
-        // Convert and verify encrypted total
-        euint64 total = FHE.fromExternal(encryptedTotal, inputProof);
-        e.totalDeposit = total;
+        // Verify plaintext amounts sum to msg.value
+        uint256 total = 0;
+        for (uint8 i = 0; i < e.milestoneCount; i++) {
+            total += milestoneAmountsWei[i];
+        }
+        require(total == msg.value, "ShieldFlow: plaintext amounts must sum to msg.value");
+
+        euint64 encTotal = FHE.fromExternal(encryptedTotal, inputProof);
+        e.totalDeposit = encTotal;
         FHE.allowThis(e.totalDeposit);
-        FHE.allow(e.totalDeposit, msg.sender);       // client can verify their deposit
-        FHE.allow(e.totalDeposit, e.contractor);      // contractor can view total
+        FHE.allow(e.totalDeposit, msg.sender);
+        FHE.allow(e.totalDeposit, e.contractor);
 
-        // Initialise released amount to zero
         e.releasedAmount = FHE.asEuint64(0);
         FHE.allowThis(e.releasedAmount);
         FHE.allow(e.releasedAmount, msg.sender);
         FHE.allow(e.releasedAmount, e.contractor);
 
-        // Store encrypted milestone amounts
         for (uint8 i = 0; i < e.milestoneCount; i++) {
             euint64 amt = FHE.fromExternal(encMilestoneAmts[i], inputProof);
             e.milestones[i].encryptedAmount = amt;
             FHE.allowThis(e.milestones[i].encryptedAmount);
-            FHE.allow(e.milestones[i].encryptedAmount, msg.sender);   // client
-            FHE.allow(e.milestones[i].encryptedAmount, e.contractor); // contractor
+            FHE.allow(e.milestones[i].encryptedAmount, msg.sender);
+            FHE.allow(e.milestones[i].encryptedAmount, e.contractor);
             if (e.auditor != address(0)) {
-                FHE.allow(e.milestones[i].encryptedAmount, e.auditor); // auditor (if set)
+                FHE.allow(e.milestones[i].encryptedAmount, e.auditor);
             }
+
+            e.milestones[i].plainAmountWei = milestoneAmountsWei[i];
         }
 
+        e.totalDepositWei = msg.value;
         e.status = EscrowStatus.Active;
-        emit EscrowDeposited(escrowId);
+        emit EscrowDeposited(escrowId, msg.value);
     }
 
     /**
-     * @notice Contractor submits a milestone as complete (signals readiness for approval).
-     * @param escrowId       Target escrow.
-     * @param milestoneIndex Milestone index (0-based).
+     * @notice Contractor submits a milestone as complete.
      */
     function submitMilestone(
         uint256 escrowId,
@@ -214,7 +194,10 @@ contract ShieldFlowEscrow is ZamaEthereumConfig {
         Escrow storage e = _escrows[escrowId];
         require(milestoneIndex < e.milestoneCount, "ShieldFlow: invalid milestone");
         Milestone storage m = e.milestones[milestoneIndex];
-        require(m.status == MilestoneStatus.Pending || m.status == MilestoneStatus.InProgress, "ShieldFlow: already submitted");
+        require(
+            m.status == MilestoneStatus.Pending || m.status == MilestoneStatus.InProgress,
+            "ShieldFlow: already submitted"
+        );
 
         m.status = MilestoneStatus.InProgress;
         m.contractorSubmitted = true;
@@ -224,8 +207,6 @@ contract ShieldFlowEscrow is ZamaEthereumConfig {
 
     /**
      * @notice Client approves a submitted milestone, marking it ready for release.
-     * @param escrowId       Target escrow.
-     * @param milestoneIndex Milestone index (0-based).
      */
     function approveMilestone(
         uint256 escrowId,
@@ -243,13 +224,7 @@ contract ShieldFlowEscrow is ZamaEthereumConfig {
         emit MilestoneApproved(escrowId, milestoneIndex);
     }
 
-    /**
-     * @notice Release the encrypted amount for an approved milestone to the contractor.
-     *         The released amount is accumulated in the encrypted releasedAmount handle.
-     *         Overflow is guarded homomorphically with FHE.select.
-     * @param escrowId       Target escrow.
-     * @param milestoneIndex Milestone index (0-based).
-     */
+
     function releaseMilestone(
         uint256 escrowId,
         uint8 milestoneIndex
@@ -259,12 +234,13 @@ contract ShieldFlowEscrow is ZamaEthereumConfig {
         Milestone storage m = e.milestones[milestoneIndex];
         require(m.status == MilestoneStatus.Approved, "ShieldFlow: milestone not approved");
 
-        // Overflow-safe accumulation of released amount
+        uint256 amountWei = m.plainAmountWei;
+        require(amountWei > 0, "ShieldFlow: milestone has no plaintext amount");
+
         euint64 newReleased = FHE.add(e.releasedAmount, m.encryptedAmount);
         ebool didOverflow = FHE.lt(newReleased, e.releasedAmount);
         e.releasedAmount = FHE.select(didOverflow, e.releasedAmount, newReleased);
 
-        // Re-grant ACL after state update (mandatory for new handle)
         FHE.allowThis(e.releasedAmount);
         FHE.allow(e.releasedAmount, e.client);
         FHE.allow(e.releasedAmount, e.contractor);
@@ -272,21 +248,34 @@ contract ShieldFlowEscrow is ZamaEthereumConfig {
             FHE.allow(e.releasedAmount, e.auditor);
         }
 
-        m.status = MilestoneStatus.Released;
-        emit MilestoneReleased(escrowId, milestoneIndex);
+        e.releasedWei += amountWei;
+        e.pendingWithdrawal += amountWei;
 
-        // Check if all milestones are released
+        m.status = MilestoneStatus.Released;
+        emit MilestoneReleased(escrowId, milestoneIndex, amountWei);
+
         if (_allMilestonesReleased(escrowId)) {
             e.status = EscrowStatus.Completed;
             emit EscrowCompleted(escrowId);
         }
     }
 
+    function withdrawReleased(uint256 escrowId) external {
+        Escrow storage e = _escrows[escrowId];
+        require(e.contractor == msg.sender, "ShieldFlow: caller is not contractor");
+        uint256 amount = e.pendingWithdrawal;
+        require(amount > 0, "ShieldFlow: nothing to withdraw");
+
+        e.pendingWithdrawal = 0;
+
+        (bool ok, ) = msg.sender.call{value: amount}("");
+        require(ok, "ShieldFlow: ETH transfer failed");
+
+        emit FundsWithdrawn(escrowId, msg.sender, amount);
+    }
+
     /**
      * @notice Grant an auditor read access to all encrypted handles in an escrow.
-     *         Only the client can grant this — it is irreversible per-escrow.
-     * @param escrowId Target escrow.
-     * @param auditor  Address to grant auditor access.
      */
     function grantAuditorAccess(
         uint256 escrowId,
@@ -294,11 +283,13 @@ contract ShieldFlowEscrow is ZamaEthereumConfig {
     ) external onlyClient(escrowId) {
         require(auditor != address(0), "ShieldFlow: invalid auditor address");
         Escrow storage e = _escrows[escrowId];
-        require(e.status != EscrowStatus.Completed && e.status != EscrowStatus.Cancelled, "ShieldFlow: escrow closed");
+        require(
+            e.status != EscrowStatus.Completed && e.status != EscrowStatus.Cancelled,
+            "ShieldFlow: escrow closed"
+        );
 
         e.auditor = auditor;
 
-        // Grant auditor read access to all existing encrypted handles
         FHE.allow(e.totalDeposit, auditor);
         FHE.allow(e.releasedAmount, auditor);
         for (uint8 i = 0; i < e.milestoneCount; i++) {
@@ -311,7 +302,7 @@ contract ShieldFlowEscrow is ZamaEthereumConfig {
     }
 
     /**
-     * @notice Cancel an escrow in Pending state (before funding). Only client can cancel.
+     * @notice Cancel an escrow in Pending state and refund the client if needed.
      */
     function cancelEscrow(uint256 escrowId) external onlyClient(escrowId) {
         Escrow storage e = _escrows[escrowId];
@@ -320,11 +311,6 @@ contract ShieldFlowEscrow is ZamaEthereumConfig {
         emit EscrowCancelled(escrowId);
     }
 
-    // ─── View Functions ───────────────────────────────────────────────────────
-
-    /**
-     * @notice Returns plaintext metadata about an escrow (no encrypted data exposed).
-     */
     function getEscrowInfo(uint256 escrowId)
         external
         view
@@ -342,47 +328,55 @@ contract ShieldFlowEscrow is ZamaEthereumConfig {
     }
 
     /**
-     * @notice Returns the encrypted total deposit handle for an escrow.
-     *         ACL-gated: only client/contractor/auditor can decrypt.
+     * @notice Returns plaintext Wei balances for an escrow.
      */
+    function getEscrowBalances(uint256 escrowId)
+        external
+        view
+        returns (
+            uint256 totalDepositWei,
+            uint256 releasedWei,
+            uint256 pendingWithdrawal
+        )
+    {
+        Escrow storage e = _escrows[escrowId];
+        return (e.totalDepositWei, e.releasedWei, e.pendingWithdrawal);
+    }
+
     function getTotalDeposit(uint256 escrowId) external view returns (euint64) {
         return _escrows[escrowId].totalDeposit;
     }
 
-    /**
-     * @notice Returns the encrypted released amount handle for an escrow.
-     *         ACL-gated: only client/contractor/auditor can decrypt.
-     */
     function getReleasedAmount(uint256 escrowId) external view returns (euint64) {
         return _escrows[escrowId].releasedAmount;
     }
 
-    /**
-     * @notice Returns milestone metadata (plaintext status + deadline) and its encrypted amount handle.
-     */
     function getMilestone(uint256 escrowId, uint8 milestoneIndex)
         external
         view
         returns (
-            euint64 encryptedAmount,
-            uint64  deadline,
+            euint64         encryptedAmount,
+            uint256         plainAmountWei,
+            uint64          deadline,
             MilestoneStatus milestoneStatus,
-            bool clientApproved,
-            bool contractorSubmitted
+            bool            clientApproved,
+            bool            contractorSubmitted
         )
     {
         Milestone storage m = _escrows[escrowId].milestones[milestoneIndex];
-        return (m.encryptedAmount, m.deadline, m.status, m.clientApproved, m.contractorSubmitted);
+        return (
+            m.encryptedAmount,
+            m.plainAmountWei,
+            m.deadline,
+            m.status,
+            m.clientApproved,
+            m.contractorSubmitted
+        );
     }
 
-    /**
-     * @notice Returns the next escrow ID (useful for frontends to track IDs).
-     */
     function nextEscrowId() external view returns (uint256) {
         return _nextEscrowId;
     }
-
-    // ─── Internal Helpers ─────────────────────────────────────────────────────
 
     function _allMilestonesReleased(uint256 escrowId) internal view returns (bool) {
         Escrow storage e = _escrows[escrowId];
