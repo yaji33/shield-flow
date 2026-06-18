@@ -108,7 +108,7 @@ function Hero() {
               Read the Docs
             </a>
           </div>
-
+          {/*
           <div className="mt-14 flex flex-wrap items-center justify-center gap-x-8 gap-y-3 text-xs text-muted-foreground">
             <span className="inline-flex items-center gap-2">
               <HugeiconsIcon icon={CheckmarkBadge02Icon} size={14} strokeWidth={1.5} />
@@ -123,6 +123,7 @@ function Hero() {
               Non-custodial
             </span>
           </div>
+          */}
         </motion.div>
 
         <motion.div
