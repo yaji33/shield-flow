@@ -1,14 +1,14 @@
-import { ContractStatusBadge } from "@/components/contract-status-badge";
+"use client";
 
-const EVENTS = [
-  { ts: "2 min ago", event: "MilestoneReleased", escrow: "0xA3F2…91dE", detail: "Milestone 1" },
-  { ts: "14 min ago", event: "MilestoneApproved", escrow: "0xA3F2…91dE", detail: "Milestone 1" },
-  { ts: "1 hr ago", event: "MilestoneSubmitted", escrow: "0xA3F2…91dE", detail: "Milestone 1" },
-  { ts: "3 hr ago", event: "EscrowDeposited", escrow: "0xC18B…7720", detail: "—" },
-  { ts: "1 day ago", event: "EscrowCreated", escrow: "0xC18B…7720", detail: "3 milestones" },
-];
+import Link from "next/link";
+import {
+  formatRelativeTime,
+  useUserEscrowActivity,
+} from "@/lib/hooks/use-user-activity";
 
 export default function Activity() {
+  const { data: events = [], isLoading } = useUserEscrowActivity();
+
   return (
     <div className="p-8 md:p-12">
       <div className="mx-auto max-w-[1100px]">
@@ -20,24 +20,45 @@ export default function Activity() {
         </div>
 
         <div className="rounded-xl border border-border bg-surface">
-          <div className="divide-y divide-border">
-            {EVENTS.map((e, i) => (
-              <div key={i} className="flex items-center gap-4 px-5 py-4">
-                <span className="w-20 shrink-0 text-xs text-muted-foreground">
-                  {e.ts}
-                </span>
-                <span className="flex-1 font-mono text-xs">{e.event}</span>
-                <span className="font-mono text-xs text-muted-foreground">
-                  {e.escrow}
-                </span>
-                <span className="text-xs text-muted-foreground">{e.detail}</span>
-              </div>
-            ))}
-          </div>
+          {isLoading ? (
+            <p className="px-5 py-8 text-sm text-muted-foreground">
+              Loading activity from Sepolia…
+            </p>
+          ) : events.length === 0 ? (
+            <p className="px-5 py-8 text-sm text-muted-foreground">
+              No activity yet for your escrows.
+            </p>
+          ) : (
+            <div className="divide-y divide-border">
+              {events.map((event) => (
+                <div
+                  key={`${event.transactionHash}-${event.eventName}-${event.escrowId}`}
+                  className="flex flex-wrap items-center gap-4 px-5 py-4"
+                >
+                  <span className="w-24 shrink-0 text-xs text-muted-foreground">
+                    {event.timestamp
+                      ? formatRelativeTime(event.timestamp)
+                      : "—"}
+                  </span>
+                  <span className="min-w-[140px] flex-1 font-mono text-xs">
+                    {event.eventName}
+                  </span>
+                  <Link
+                    href={`/app/contracts/${event.escrowId}`}
+                    className="font-mono text-xs text-muted-foreground transition-colors hover:text-foreground"
+                  >
+                    #{event.escrowId.toString()}
+                  </Link>
+                  <span className="text-xs text-muted-foreground">
+                    {event.detail}
+                  </span>
+                </div>
+              ))}
+            </div>
+          )}
           <div className="border-t border-border px-5 py-3">
             <p className="text-xs text-muted-foreground">
-              {/* TODO: replace with live event log via viem getLogs */}
-              Showing last 5 events. Wire to on-chain EscrowCreated / Milestone* events.
+              On-chain events for your escrows · polled every 15s
             </p>
           </div>
         </div>
