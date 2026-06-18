@@ -1,13 +1,6 @@
-/**
- * ABI for ShieldFlowEscrow contract.
- * Derived from: ../../../fhevm-hardhat/contracts/ShieldFlowEscrow.sol
- *
- * NOTE: fhEVM encrypted types map to ABI types as follows:
- *   euint64 (stored handle)   → uint256
- *   externalEuint64 (input)   → uint256
- */
+
 export const ShieldFlowEscrowABI = [
-  // ─── Events ─────────────────────────────────────────────────────────
+  // Events 
   {
     type: "event",
     name: "EscrowCreated",
@@ -21,7 +14,10 @@ export const ShieldFlowEscrowABI = [
   {
     type: "event",
     name: "EscrowDeposited",
-    inputs: [{ name: "escrowId", type: "uint256", indexed: true }],
+    inputs: [
+      { name: "escrowId", type: "uint256", indexed: true },
+      { name: "totalWei", type: "uint256", indexed: false },
+    ],
   },
   {
     type: "event",
@@ -45,6 +41,16 @@ export const ShieldFlowEscrowABI = [
     inputs: [
       { name: "escrowId", type: "uint256", indexed: true },
       { name: "milestoneIndex", type: "uint8", indexed: false },
+      { name: "amountWei", type: "uint256", indexed: false },
+    ],
+  },
+  {
+    type: "event",
+    name: "FundsWithdrawn",
+    inputs: [
+      { name: "escrowId", type: "uint256", indexed: true },
+      { name: "contractor", type: "address", indexed: true },
+      { name: "amountWei", type: "uint256", indexed: false },
     ],
   },
   {
@@ -66,7 +72,7 @@ export const ShieldFlowEscrowABI = [
     ],
   },
 
-  // ─── Write Functions ─────────────────────────────────────────────────
+  // Write Functions 
   {
     type: "function",
     name: "createEscrow",
@@ -85,11 +91,10 @@ export const ShieldFlowEscrowABI = [
     stateMutability: "payable",
     inputs: [
       { name: "escrowId", type: "uint256" },
-      // TODO: integrate fhEVM SDK encrypt() call here — encryptedTotal (externalEuint64)
-      { name: "encryptedTotal", type: "uint256" },
-      // TODO: integrate fhEVM SDK encrypt() call here — encMilestoneAmts (externalEuint64[])
-      { name: "encMilestoneAmts", type: "uint256[]" },
+      { name: "encryptedTotal", type: "bytes32" },
+      { name: "encMilestoneAmts", type: "bytes32[]" },
       { name: "inputProof", type: "bytes" },
+      { name: "milestoneAmountsWei", type: "uint256[]" },
     ],
     outputs: [],
   },
@@ -125,6 +130,13 @@ export const ShieldFlowEscrowABI = [
   },
   {
     type: "function",
+    name: "withdrawReleased",
+    stateMutability: "nonpayable",
+    inputs: [{ name: "escrowId", type: "uint256" }],
+    outputs: [],
+  },
+  {
+    type: "function",
     name: "grantAuditorAccess",
     stateMutability: "nonpayable",
     inputs: [
@@ -141,7 +153,7 @@ export const ShieldFlowEscrowABI = [
     outputs: [],
   },
 
-  // ─── View Functions ──────────────────────────────────────────────────
+  // View Functions 
   {
     type: "function",
     name: "getEscrowInfo",
@@ -158,19 +170,28 @@ export const ShieldFlowEscrowABI = [
   },
   {
     type: "function",
+    name: "getEscrowBalances",
+    stateMutability: "view",
+    inputs: [{ name: "escrowId", type: "uint256" }],
+    outputs: [
+      { name: "totalDepositWei", type: "uint256" },
+      { name: "releasedWei", type: "uint256" },
+      { name: "pendingWithdrawal", type: "uint256" },
+    ],
+  },
+  {
+    type: "function",
     name: "getTotalDeposit",
     stateMutability: "view",
     inputs: [{ name: "escrowId", type: "uint256" }],
-    // Returns euint64 handle — uint256 in ABI
-    outputs: [{ name: "", type: "uint256" }],
+    outputs: [{ name: "", type: "bytes32" }],
   },
   {
     type: "function",
     name: "getReleasedAmount",
     stateMutability: "view",
     inputs: [{ name: "escrowId", type: "uint256" }],
-    // Returns euint64 handle — uint256 in ABI
-    outputs: [{ name: "", type: "uint256" }],
+    outputs: [{ name: "", type: "bytes32" }],
   },
   {
     type: "function",
@@ -181,8 +202,8 @@ export const ShieldFlowEscrowABI = [
       { name: "milestoneIndex", type: "uint8" },
     ],
     outputs: [
-      // euint64 handle — uint256 in ABI
-      { name: "encryptedAmount", type: "uint256" },
+      { name: "encryptedAmount", type: "bytes32" },
+      { name: "plainAmountWei", type: "uint256" },
       { name: "deadline", type: "uint64" },
       { name: "milestoneStatus", type: "uint8" },
       { name: "clientApproved", type: "bool" },
