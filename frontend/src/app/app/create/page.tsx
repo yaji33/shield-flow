@@ -18,6 +18,7 @@ import { useCreateEscrow } from "@/lib/hooks/use-escrow";
 import { useWallet } from "@/lib/hooks/use-wallet";
 import { ShieldFlowEscrowABI } from "@/lib/contracts/abis";
 import { assertUint64Wei } from "@/lib/fhe/fhevm";
+import { getContractErrorMessage } from "@/lib/contract-errors";
 import { ShareEscrowLink } from "@/components/share-escrow-link";
 import { FundEscrowForm } from "@/components/fund-escrow-form";
 
@@ -129,7 +130,7 @@ export default function CreateEscrow() {
         ? ("0x0000000000000000000000000000000000000000" as const)
         : (auditor as `0x${string}`);
 
-    const createToast = toast.loading("Creating escrow on Sepolia (no ETH)…");
+    const createToast = toast.loading("Registering escrow on Sepolia…");
 
     try {
       setSubmitPhase("creating");
@@ -171,9 +172,12 @@ export default function CreateEscrow() {
         { id: createToast },
       );
     } catch (error) {
-      const message =
-        error instanceof Error ? error.message : "Transaction failed";
-      toast.error(message, { id: createToast });
+      const message = getContractErrorMessage(error);
+      if (message === "Transaction cancelled.") {
+        toast.dismiss(createToast);
+      } else {
+        toast.error(message, { id: createToast });
+      }
       setSubmitPhase("idle");
     }
   };
@@ -409,7 +413,7 @@ export default function CreateEscrow() {
                   {txHash && (
                     <div>
                       <p className="text-xs text-muted-foreground">
-                        Create tx (no ETH sent):
+                        Escrow registered:
                       </p>
                       <p className="mt-1 break-all font-mono text-xs text-foreground">
                         {txHash}
@@ -531,17 +535,36 @@ export default function CreateEscrow() {
                   </div>
                 </div>
 
-                <div className="rounded-xl border border-border bg-surface p-4 text-xs text-muted-foreground">
-                  <p className="font-medium text-foreground mb-1">Two wallet transactions</p>
-                  <ol className="list-decimal space-y-1 pl-4">
-                    <li>
-                      <span className="text-foreground">Create escrow</span> — sets up
-                      parties and milestones. No ETH is sent.
+                <div className="rounded-xl border border-border bg-surface px-5 py-4">
+                  <p className="text-xs uppercase tracking-wider text-muted-foreground mb-3">
+                    What happens next
+                  </p>
+                  <ol className="space-y-3">
+                    <li className="flex items-start gap-3">
+                      <span className="mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center rounded-full border border-border text-[10px] font-medium text-muted-foreground">
+                        1
+                      </span>
+                      <div>
+                        <p className="text-sm font-medium text-foreground">Register the escrow</p>
+                        <p className="mt-0.5 text-xs text-muted-foreground">
+                          Saves the parties and milestones on-chain. No ETH leaves your wallet.
+                        </p>
+                      </div>
                     </li>
-                    <li>
-                      <span className="text-foreground">Deposit</span> — encrypts amounts
-                      via the Zama relayer, then sends {totalEth.toFixed(4)} ETH in one{" "}
-                      <code className="font-mono">deposit()</code> call.
+                    <li className="flex items-start gap-3">
+                      <span className="mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center rounded-full border border-border text-[10px] font-medium text-muted-foreground">
+                        2
+                      </span>
+                      <div>
+                        <p className="text-sm font-medium text-foreground">
+                          Send funds —{" "}
+                          <span className="font-mono">{totalEth.toFixed(4)} ETH</span>
+                        </p>
+                        <p className="mt-0.5 text-xs text-muted-foreground">
+                          Transfers ETH into the escrow. Funds are locked until each
+                          milestone is approved by you.
+                        </p>
+                      </div>
                     </li>
                   </ol>
                 </div>
@@ -552,11 +575,15 @@ export default function CreateEscrow() {
                   </p>
                 )}
 
-                {createError && (
-                  <p className="text-xs text-destructive">
-                    {(createError as Error).message}
-                  </p>
-                )}
+                {createError && (() => {
+                  const msg = getContractErrorMessage(createError);
+                  if (msg === "Transaction cancelled.") return null;
+                  return (
+                    <p className="rounded-lg border border-destructive/30 bg-destructive/10 px-3 py-2 text-xs text-destructive">
+                      {msg}
+                    </p>
+                  );
+                })()}
 
                 <div className="flex gap-3">
                   <button
@@ -571,7 +598,7 @@ export default function CreateEscrow() {
                     disabled={isCreating}
                     className="inline-flex items-center gap-2 rounded-lg bg-foreground px-5 py-3 text-sm font-medium text-background transition-opacity hover:opacity-90 disabled:opacity-50"
                   >
-                    {isCreating ? "Creating escrow…" : "Create escrow (step 1 — no ETH)"}
+                    {isCreating ? "Creating escrow…" : "Create escrow"}
                     <HugeiconsIcon icon={ArrowRight02Icon} size={14} strokeWidth={2} />
                   </button>
                 </div>

@@ -19,7 +19,7 @@ import { ShareEscrowLink } from "@/components/share-escrow-link";
 import { FundEscrowForm } from "@/components/fund-escrow-form";
 import { useWallet } from "@/lib/hooks/use-wallet";
 import { shortAddress } from "@/lib/hooks/use-user-escrows";
-import { getContractErrorMessage } from "@/lib/contract-errors";
+import { getContractErrorMessage, isUserCancellation } from "@/lib/contract-errors";
 import {
   useGetEscrow,
   useGetMilestone,
@@ -130,13 +130,19 @@ function MilestoneCard({
     onRefetch();
   };
 
+  const handleError = (error: unknown) => {
+    if (!isUserCancellation(error)) {
+      toast.error(getContractErrorMessage(error));
+    }
+  };
+
   const handleWithdraw = async () => {
     try {
       await withdrawReleased(escrowId);
       toast.success("ETH withdrawn to your wallet.");
       refetchAll();
     } catch (error) {
-      toast.error(getContractErrorMessage(error));
+      handleError(error);
     }
   };
 
@@ -146,7 +152,7 @@ function MilestoneCard({
       toast.success("Work submitted — waiting for client approval.");
       refetchAll();
     } catch (error) {
-      toast.error(getContractErrorMessage(error));
+      handleError(error);
     }
   };
 
@@ -156,7 +162,7 @@ function MilestoneCard({
       toast.success("Milestone approved — you can now release funds.");
       refetchAll();
     } catch (error) {
-      toast.error(getContractErrorMessage(error));
+      handleError(error);
     }
   };
 
@@ -166,7 +172,7 @@ function MilestoneCard({
       toast.success("Milestone released.");
       refetchAll();
     } catch (error) {
-      toast.error(getContractErrorMessage(error));
+      handleError(error);
     }
   };
 
