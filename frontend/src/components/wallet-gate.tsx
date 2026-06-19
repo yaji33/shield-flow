@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import Image from "next/image";
 import { HugeiconsIcon } from "@hugeicons/react";
 import {
   ArrowLeft02Icon,
@@ -19,6 +20,18 @@ export function WalletGate({ children }: { children: React.ReactNode }) {
 
   return (
     <div className="flex min-h-[calc(100vh-0px)] flex-col items-center justify-center p-8">
+      <div className="mb-8 flex items-center gap-3">
+        <Image
+          src="/shield-flow-logo.png"
+          alt="ShieldFlow"
+          width={36}
+          height={36}
+          className="shrink-0"
+        />
+        <span className="text-base font-medium uppercase tracking-[0.18em] text-foreground">
+          ShieldFlow
+        </span>
+      </div>
       <div className="w-full max-w-md rounded-xl border border-border bg-surface p-8 text-center">
         <span className="mx-auto flex h-12 w-12 items-center justify-center rounded-xl border border-border bg-background">
           <HugeiconsIcon icon={WalletAdd01Icon} size={22} strokeWidth={1.5} />

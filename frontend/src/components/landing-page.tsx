@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import Link from "next/link";
+import Image from "next/image";
 import { motion } from "framer-motion";
 import { HugeiconsIcon } from "@hugeicons/react";
 import {
@@ -36,10 +37,14 @@ function Nav() {
       )}
     >
       <div className="mx-auto flex h-16 max-w-[1200px] items-center justify-between px-6">
-        <Link href="/" className="flex items-center gap-2">
-          <span className="flex h-6 w-6 items-center justify-center rounded-md border border-border-strong bg-surface">
-            <HugeiconsIcon icon={ShieldEnergyIcon} size={14} strokeWidth={1.5} />
-          </span>
+        <Link href="/" className="flex items-center gap-2.5">
+          <Image
+            src="/shield-flow-logo.png"
+            alt="ShieldFlow"
+            width={24}
+            height={24}
+            className="shrink-0"
+          />
           <span className="text-sm font-medium uppercase tracking-[0.18em]">
             ShieldFlow
           </span>
@@ -147,13 +152,13 @@ function Hero() {
                 <div className="text-xs uppercase tracking-wider text-muted-foreground">
                   Total escrowed
                 </div>
-                <EncryptedValue value="48,000.00" size="md" />
+                <EncryptedValue size="md" symbol="cUSDT" />
               </div>
               <div className="space-y-1.5">
                 <div className="text-xs uppercase tracking-wider text-muted-foreground">
                   Next release
                 </div>
-                <EncryptedValue value="12,000.00" size="md" />
+                <EncryptedValue size="md" symbol="cUSDT" />
               </div>
               <div className="space-y-1.5">
                 <div className="text-xs uppercase tracking-wider text-muted-foreground">
@@ -364,10 +369,14 @@ function Footer() {
     <footer id="docs" className="py-16">
       <div className="mx-auto grid max-w-[1200px] gap-12 px-6 md:grid-cols-2">
         <div>
-          <div className="flex items-center gap-2">
-            <span className="flex h-6 w-6 items-center justify-center rounded-md border border-border-strong bg-surface">
-              <HugeiconsIcon icon={ShieldEnergyIcon} size={14} strokeWidth={1.5} />
-            </span>
+          <div className="flex items-center gap-2.5">
+            <Image
+              src="/shield-flow-logo.png"
+              alt="ShieldFlow"
+              width={22}
+              height={22}
+              className="shrink-0 opacity-80"
+            />
             <span className="text-sm font-medium uppercase tracking-[0.18em]">
               ShieldFlow
             </span>
