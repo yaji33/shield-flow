@@ -17,11 +17,16 @@ export const metadata: Metadata = {
   title: "ShieldFlow",
   description:
     "Encrypted escrow and milestone payments for global teams. Amounts, milestones, and approvals stay private on-chain.",
+  icons: {
+    icon: "/shield-flow-logo.png",
+    apple: "/shield-flow-logo.png",
+  },
   openGraph: {
     title: "ShieldFlow — Private escrow on Zama fhEVM",
     description:
       "Encrypted escrow and milestone payments for global teams. Amounts stay private on-chain.",
     type: "website",
+    images: [{ url: "/shield-flow-logo.png" }],
   },
   twitter: { card: "summary_large_image" },
 };

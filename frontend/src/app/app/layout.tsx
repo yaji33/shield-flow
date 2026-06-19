@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import Image from "next/image";
 import { usePathname } from "next/navigation";
 import { HugeiconsIcon } from "@hugeicons/react";
 import {
@@ -8,7 +9,6 @@ import {
   Notebook01Icon,
   PlusSignSquareIcon,
   Activity01Icon,
-  ShieldEnergyIcon,
 } from "@hugeicons/core-free-icons";
 import { cn } from "@/lib/utils";
 import { WalletConnect } from "@/components/wallet-connect";
@@ -27,10 +27,14 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
   return (
     <div className="flex h-screen overflow-hidden bg-background">
       <aside className="hidden w-64 shrink-0 flex-col border-r border-border bg-surface/40 md:flex">
-        <div className="flex h-16 shrink-0 items-center gap-2 border-b border-border px-5">
-          <span className="flex h-6 w-6 items-center justify-center rounded-md border border-border-strong bg-surface">
-            <HugeiconsIcon icon={ShieldEnergyIcon} size={14} strokeWidth={1.5} />
-          </span>
+        <div className="flex h-16 shrink-0 items-center gap-2.5 border-b border-border px-5">
+          <Image
+            src="/shield-flow-logo.png"
+            alt="ShieldFlow"
+            width={24}
+            height={24}
+            className="shrink-0"
+          />
           <Link href="/" className="text-sm font-medium uppercase tracking-[0.18em]">
             ShieldFlow
           </Link>
