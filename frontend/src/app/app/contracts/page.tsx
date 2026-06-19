@@ -83,7 +83,6 @@ export default function ContractsList() {
                       <td className="px-5 py-4">
                         <EncryptedValue
                           size="sm"
-                          interactive={false}
                           symbol={c.isFunded ? "ETH" : undefined}
                         />
                       </td>

@@ -45,7 +45,7 @@ export default function Dashboard() {
               Total Escrowed
             </div>
             <div className="mt-3">
-              <EncryptedValue size="lg" interactive={false} symbol="ETH" />
+              <EncryptedValue size="lg" symbol="ETH" />
             </div>
             <p className="mt-2 text-xs text-muted-foreground">
               Amounts stay encrypted on-chain
@@ -154,7 +154,6 @@ function EscrowTable({
                   <td className="px-5 py-4">
                     <EncryptedValue
                       size="sm"
-                      interactive={false}
                       symbol={c.isFunded ? "ETH" : undefined}
                     />
                   </td>
