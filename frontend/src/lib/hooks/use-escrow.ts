@@ -27,6 +27,48 @@ export function useGetEscrow(escrowId: bigint | undefined) {
   });
 }
 
+export function useGetEscrowBalances(escrowId: bigint | undefined) {
+  return useReadContract({
+    address: CONTRACT_ADDRESS,
+    abi: ShieldFlowEscrowABI,
+    functionName: "getEscrowBalances",
+    args: escrowId !== undefined ? [escrowId] : undefined,
+    chainId: sepolia.id,
+    query: {
+      enabled: escrowId !== undefined,
+      refetchInterval: 12_000,
+    },
+  });
+}
+
+export function useGetTotalDeposit(escrowId: bigint | undefined) {
+  return useReadContract({
+    address: CONTRACT_ADDRESS,
+    abi: ShieldFlowEscrowABI,
+    functionName: "getTotalDeposit",
+    args: escrowId !== undefined ? [escrowId] : undefined,
+    chainId: sepolia.id,
+    query: {
+      enabled: escrowId !== undefined,
+      refetchInterval: 60_000,
+    },
+  });
+}
+
+export function useGetReleasedAmount(escrowId: bigint | undefined) {
+  return useReadContract({
+    address: CONTRACT_ADDRESS,
+    abi: ShieldFlowEscrowABI,
+    functionName: "getReleasedAmount",
+    args: escrowId !== undefined ? [escrowId] : undefined,
+    chainId: sepolia.id,
+    query: {
+      enabled: escrowId !== undefined,
+      refetchInterval: 12_000,
+    },
+  });
+}
+
 export function useGetMilestone(
   escrowId: bigint | undefined,
   milestoneIndex: number,
@@ -194,6 +236,25 @@ export function useWithdrawReleased() {
   };
 
   return { withdrawReleased, isPending, error };
+}
+
+export function useGrantAuditorAccess() {
+  const { writeContractAsync, isPending, error } = useWriteContract();
+
+  const grantAuditorAccess = async (
+    escrowId: bigint,
+    auditor: `0x${string}`,
+  ) => {
+    return writeContractAsync({
+      address: CONTRACT_ADDRESS,
+      abi: ShieldFlowEscrowABI,
+      functionName: "grantAuditorAccess",
+      args: [escrowId, auditor],
+      chainId: sepolia.id,
+    });
+  };
+
+  return { grantAuditorAccess, isPending, error };
 }
 
 export function useCancelEscrow() {

@@ -24,7 +24,7 @@ export type EscrowStatusVariant = "active" | "pending" | "completed" | "disputed
 
 export type UserEscrowRow = {
   id: bigint;
-  role: "client" | "contractor";
+  role: "client" | "contractor" | "auditor";
   counterparty: Address;
   status: EscrowStatusKey;
   statusVariant: EscrowStatusVariant;
@@ -75,10 +75,15 @@ async function fetchEscrowIdsForUser(
       args: [id],
     });
 
-    const [client, contractor] = info;
+    const [client, contractor, auditor] = info;
+    const ZERO_ADDRESS = "0x0000000000000000000000000000000000000000";
+    const isAuditor =
+      auditor !== ZERO_ADDRESS && isAddressEqual(auditor, userAddress);
+
     if (
       isAddressEqual(client, userAddress) ||
-      isAddressEqual(contractor, userAddress)
+      isAddressEqual(contractor, userAddress) ||
+      isAuditor
     ) {
       ids.push(id);
     }
@@ -152,9 +157,20 @@ async function fetchUserEscrowRows(
         args: [id],
       });
 
-      const [client, contractor, , status, , milestoneCount] = info;
-      const role = isAddressEqual(client, userAddress) ? "client" : "contractor";
-      const counterparty = role === "client" ? contractor : client;
+      const [client, contractor, auditor, status, , milestoneCount] = info;
+      const ZERO_ADDRESS = "0x0000000000000000000000000000000000000000";
+      const isAuditor =
+        auditor !== ZERO_ADDRESS && isAddressEqual(auditor, userAddress);
+      const role = isAddressEqual(client, userAddress)
+        ? "client"
+        : isAddressEqual(contractor, userAddress)
+          ? "contractor"
+          : "auditor";
+      const counterparty = isAuditor
+        ? client
+        : role === "client"
+          ? contractor
+          : client;
       const { label, releasedCount } = await describeNextMilestone(
         publicClient,
         id,
