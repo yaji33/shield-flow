@@ -19,11 +19,12 @@ import { useWallet } from "@/lib/hooks/use-wallet";
 import { ShieldFlowEscrowABI } from "@/lib/contracts/abis";
 import { assertUint64Wei } from "@/lib/fhe/fhevm";
 import { getContractErrorMessage } from "@/lib/contract-errors";
+import { saveEscrowMeta } from "@/lib/escrow-meta";
 import { ShareEscrowLink } from "@/components/share-escrow-link";
 import { FundEscrowForm } from "@/components/fund-escrow-form";
 
 const STEPS = [
-  { n: 1, label: "Parties", sublabel: "Contractor & auditor", icon: UserMultipleIcon },
+  { n: 1, label: "Work", sublabel: "What's being done", icon: UserMultipleIcon },
   { n: 2, label: "Milestones", sublabel: "Amounts & deadlines", icon: CircleLock02Icon },
   { n: 3, label: "Review", sublabel: "Confirm & create", icon: CheckmarkBadge02Icon },
 ];
@@ -48,6 +49,8 @@ type SubmitPhase =
 
 export default function CreateEscrow() {
   const [step, setStep] = useState(1);
+  const [title, setTitle] = useState("");
+  const [scopeOfWork, setScopeOfWork] = useState("");
   const [contractor, setContractor] = useState("");
   const [auditor, setAuditor] = useState("");
   const [milestones, setMilestones] = useState<Milestone[]>([
@@ -86,6 +89,7 @@ export default function CreateEscrow() {
   const validateForm = (): string | null => {
     if (!isConnected || !address) return "Connect your wallet first.";
     if (isWrongChain) return "Switch to Sepolia before creating an escrow.";
+    if (!title.trim()) return "Add a project title.";
     if (!isAddress(contractor)) return "Enter a valid contractor address.";
     if (address.toLowerCase() === contractor.toLowerCase()) {
       return "You cannot be your own contractor.";
@@ -164,6 +168,12 @@ export default function CreateEscrow() {
       if (createdId === null) {
         throw new Error("Could not read escrow ID from transaction receipt");
       }
+
+      saveEscrowMeta(createdId, {
+        title: title.trim(),
+        scopeOfWork: scopeOfWork.trim(),
+        milestones: milestones.map((m) => ({ description: m.label.trim() })),
+      });
 
       setEscrowId(createdId);
       setSubmitPhase("awaiting_deposit");
@@ -271,32 +281,67 @@ export default function CreateEscrow() {
         </div>
         {step === 1 && (
           <div className="space-y-6">
-            <div className="rounded-xl border border-border bg-surface p-6">
-              <h2 className="mb-4 text-sm font-medium">Contractor address</h2>
-              <input
-                type="text"
-                placeholder="0x…"
-                value={contractor}
-                onChange={(e) => setContractor(e.target.value)}
-                className="w-full rounded-lg border border-border bg-background px-3 py-2 font-mono text-sm text-foreground placeholder:text-muted-foreground focus:border-border-strong focus:outline-none"
-              />
+            <div className="rounded-xl border border-border bg-surface p-6 space-y-5">
+              <div>
+                <h2 className="mb-1 text-sm font-medium">Project title</h2>
+                <p className="mb-3 text-xs text-muted-foreground">
+                  A short name for this engagement, visible to both parties.
+                </p>
+                <input
+                  type="text"
+                  placeholder="e.g. Landing page redesign"
+                  value={title}
+                  onChange={(e) => setTitle(e.target.value)}
+                  className="w-full rounded-lg border border-border bg-background px-3 py-2 text-sm text-foreground placeholder:text-muted-foreground focus:border-border-strong focus:outline-none"
+                />
+              </div>
+              <div>
+                <h2 className="mb-1 text-sm font-medium">Scope of work</h2>
+                <p className="mb-3 text-xs text-muted-foreground">
+                  Optional. Describe what the contractor is expected to deliver.
+                </p>
+                <textarea
+                  rows={3}
+                  placeholder="e.g. Redesign the marketing site including homepage, pricing, and contact pages. Deliverable is Figma files + implemented Next.js components."
+                  value={scopeOfWork}
+                  onChange={(e) => setScopeOfWork(e.target.value)}
+                  className="w-full resize-none rounded-lg border border-border bg-background px-3 py-2 text-sm text-foreground placeholder:text-muted-foreground focus:border-border-strong focus:outline-none"
+                />
+              </div>
             </div>
-            <div className="rounded-xl border border-border bg-surface p-6">
-              <h2 className="mb-1 text-sm font-medium">Auditor address</h2>
-              <p className="mb-4 text-xs text-muted-foreground">
-                Optional. Leave blank for no auditor.
-              </p>
-              <input
-                type="text"
-                placeholder="0x… (optional)"
-                value={auditor}
-                onChange={(e) => setAuditor(e.target.value)}
-                className="w-full rounded-lg border border-border bg-background px-3 py-2 font-mono text-sm text-foreground placeholder:text-muted-foreground focus:border-border-strong focus:outline-none"
-              />
+
+            <div className="rounded-xl border border-border bg-surface p-6 space-y-5">
+              <div>
+                <h2 className="mb-1 text-sm font-medium">Contractor address</h2>
+                <p className="mb-3 text-xs text-muted-foreground">
+                  The wallet address that will submit milestones and receive payment.
+                </p>
+                <input
+                  type="text"
+                  placeholder="0x…"
+                  value={contractor}
+                  onChange={(e) => setContractor(e.target.value)}
+                  className="w-full rounded-lg border border-border bg-background px-3 py-2 font-mono text-sm text-foreground placeholder:text-muted-foreground focus:border-border-strong focus:outline-none"
+                />
+              </div>
+              <div>
+                <h2 className="mb-1 text-sm font-medium">Auditor address</h2>
+                <p className="mb-3 text-xs text-muted-foreground">
+                  Optional. A trusted third party who can view encrypted amounts if a dispute arises.
+                </p>
+                <input
+                  type="text"
+                  placeholder="0x… (optional)"
+                  value={auditor}
+                  onChange={(e) => setAuditor(e.target.value)}
+                  className="w-full rounded-lg border border-border bg-background px-3 py-2 font-mono text-sm text-foreground placeholder:text-muted-foreground focus:border-border-strong focus:outline-none"
+                />
+              </div>
             </div>
+
             <button
               onClick={() => setStep(2)}
-              disabled={!contractor}
+              disabled={!title.trim() || !contractor}
               className="inline-flex items-center gap-2 rounded-lg bg-foreground px-5 py-3 text-sm font-medium text-background transition-opacity hover:opacity-90 disabled:opacity-40"
             >
               Continue
@@ -308,9 +353,14 @@ export default function CreateEscrow() {
           <div className="space-y-6">
             <div className="rounded-xl border border-border bg-surface">
               <div className="border-b border-border px-5 py-3 flex items-center justify-between">
-                <h2 className="text-sm font-medium">Milestones</h2>
-                <span className="text-xs text-muted-foreground">
-                  {milestones.length} / 10 · Total {totalEth.toFixed(4)} ETH
+                <div>
+                  <h2 className="text-sm font-medium">Milestones</h2>
+                  <p className="mt-0.5 text-xs text-muted-foreground">
+                    Each milestone is a deliverable — describe what the contractor must complete to unlock payment.
+                  </p>
+                </div>
+                <span className="text-xs text-muted-foreground shrink-0 ml-4">
+                  {milestones.length} / 10 · {totalEth.toFixed(4)} ETH
                 </span>
               </div>
               <div className="divide-y divide-border">
@@ -321,7 +371,7 @@ export default function CreateEscrow() {
                     </span>
                     <input
                       type="text"
-                      placeholder="Milestone label"
+                      placeholder="What needs to be delivered?"
                       value={m.label}
                       onChange={(e) =>
                         updateMilestone(i, { label: e.target.value })
@@ -497,6 +547,15 @@ export default function CreateEscrow() {
                 <div className="rounded-xl border border-border bg-surface p-6 space-y-4">
                   <div>
                     <div className="text-xs uppercase tracking-wider text-muted-foreground">
+                      Project
+                    </div>
+                    <div className="mt-1 text-sm font-medium">{title}</div>
+                    {scopeOfWork && (
+                      <p className="mt-1 text-xs text-muted-foreground">{scopeOfWork}</p>
+                    )}
+                  </div>
+                  <div>
+                    <div className="text-xs uppercase tracking-wider text-muted-foreground">
                       Contractor
                     </div>
                     <div className="mt-1 font-mono text-sm">{contractor}</div>
@@ -511,7 +570,7 @@ export default function CreateEscrow() {
                   )}
                   <div>
                     <div className="text-xs uppercase tracking-wider text-muted-foreground mb-2">
-                      Total deposit (encrypted)
+                      Total deposit
                     </div>
                     <div className="font-mono text-sm">{totalEth.toFixed(4)} ETH</div>
                   </div>
@@ -527,7 +586,7 @@ export default function CreateEscrow() {
                         >
                           <span>{m.label || `Milestone ${i + 1}`}</span>
                           <span className="text-xs text-muted-foreground">
-                            {m.amountEth} ETH · {m.deadlineDays}d deadline
+                            {m.amountEth} ETH · {m.deadlineDays}d
                           </span>
                         </div>
                       ))}

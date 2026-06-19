@@ -1,6 +1,6 @@
 "use client";
 
-import { use, useState } from "react";
+import { use, useState, useEffect } from "react";
 import Link from "next/link";
 import { toast } from "sonner";
 import { HugeiconsIcon } from "@hugeicons/react";
@@ -22,6 +22,7 @@ import { useWallet } from "@/lib/hooks/use-wallet";
 import { shortAddress } from "@/lib/hooks/use-user-escrows";
 import { CONTRACT_ADDRESSES } from "@/lib/contracts/addresses";
 import { getContractErrorMessage, isUserCancellation } from "@/lib/contract-errors";
+import { loadEscrowMeta, saveMilestoneDelivery, type EscrowMeta } from "@/lib/escrow-meta";
 import {
   useGetEscrow,
   useGetMilestone,
@@ -178,7 +179,11 @@ function MilestoneCard({
   role,
   escrowStatus,
   userAddress,
+  description,
+  deliveryNote,
+  deliveryUrl,
   onRefetch,
+  onDelivered,
 }: {
   escrowId: bigint;
   index: number;
@@ -186,7 +191,11 @@ function MilestoneCard({
   role: EscrowRole;
   escrowStatus: number;
   userAddress?: Address;
+  description?: string;
+  deliveryNote?: string;
+  deliveryUrl?: string;
   onRefetch: () => void;
+  onDelivered: (index: number, note: string, url: string) => void;
 }) {
   const { data: milestoneData, refetch: refetchMilestone } = useGetMilestone(
     escrowId,
@@ -196,6 +205,10 @@ function MilestoneCard({
   const { approveMilestone, isPending: isApproving } = useApproveMilestone();
   const { submitMilestone, isPending: isSubmitting } = useSubmitMilestone();
   const { withdrawReleased, isPending: isWithdrawing } = useWithdrawReleased();
+
+  const [showSubmitForm, setShowSubmitForm] = useState(false);
+  const [deliveryNoteInput, setDeliveryNoteInput] = useState("");
+  const [deliveryUrlInput, setDeliveryUrlInput] = useState("");
 
   const isActive = escrowStatus === EscrowStatus.Active;
   const isAuthorized =
@@ -207,11 +220,6 @@ function MilestoneCard({
   const deadlineTs = milestoneData ? Number(milestoneData[2]) : undefined;
   const milestoneStatusNum = milestoneData ? Number(milestoneData[3]) : undefined;
   const contractorSubmitted = milestoneData ? Boolean(milestoneData[5]) : false;
-
-  const plainEth =
-    plainAmountWei !== undefined && plainAmountWei > BigInt(0)
-      ? Number(formatEther(plainAmountWei)).toFixed(4)
-      : null;
 
   const deadlineLabel = (() => {
     if (!deadlineTs) return "—";
@@ -276,6 +284,8 @@ function MilestoneCard({
     const t = toast.loading("Submitting milestone…");
     try {
       await submitMilestone(escrowId, index);
+      onDelivered(index, deliveryNoteInput, deliveryUrlInput);
+      setShowSubmitForm(false);
       toast.success("Work submitted — waiting for client approval.", { id: t });
       refetchAll();
     } catch (error) {
@@ -348,7 +358,13 @@ function MilestoneCard({
           {deadlineLabel}
         </p>
 
-        <div className="mt-2 flex items-center gap-3 flex-wrap">
+        {description && (
+          <p className="mt-1.5 text-xs text-muted-foreground/80 leading-relaxed">
+            {description}
+          </p>
+        )}
+
+        <div className="mt-2">
           <EncryptedValue
             encryptedHandle={encryptedHandle}
             contractAddress={CONTRACT_ADDRESS}
@@ -357,15 +373,29 @@ function MilestoneCard({
             size="sm"
             symbol="ETH"
           />
-          {plainEth && (
-            <span
-              className="text-xs text-muted-foreground/60"
-              title="Plaintext amount stored for ETH transfer purposes"
-            >
-              ({plainEth} ETH on-chain)
-            </span>
-          )}
         </div>
+
+        {contractorSubmitted && (deliveryNote || deliveryUrl) && (
+          <div className="mt-3 rounded-lg border border-border bg-background px-3 py-2.5 space-y-1">
+            <p className="text-[10px] uppercase tracking-wider text-muted-foreground">
+              Delivery
+            </p>
+            {deliveryNote && (
+              <p className="text-xs text-foreground">{deliveryNote}</p>
+            )}
+            {deliveryUrl && (
+              <a
+                href={deliveryUrl}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="inline-flex items-center gap-1 text-xs text-muted-foreground underline underline-offset-2 hover:text-foreground break-all"
+              >
+                {deliveryUrl}
+                <HugeiconsIcon icon={ArrowRight02Icon} size={10} strokeWidth={2} />
+              </a>
+            )}
+          </div>
+        )}
 
         {role === "contractor" && !isActive && (
           <p className="mt-2 text-xs text-muted-foreground">
@@ -377,9 +407,47 @@ function MilestoneCard({
           contractorSubmitted &&
           !isReleased && (
             <p className="mt-2 text-xs text-amber-400/80">
-              Work submitted — waiting for client to approve.
+              Submitted — waiting for client to approve.
             </p>
           )}
+
+        {canSubmit && showSubmitForm && (
+          <div className="mt-3 rounded-lg border border-border bg-background p-3 space-y-2.5">
+            <p className="text-xs text-muted-foreground">
+              Let the client know where to find your work.
+            </p>
+            <input
+              type="url"
+              placeholder="Link to deliverable (GitHub, Drive, Figma…)"
+              value={deliveryUrlInput}
+              onChange={(e) => setDeliveryUrlInput(e.target.value)}
+              className="w-full rounded-md border border-border bg-surface px-2.5 py-1.5 text-xs text-foreground placeholder:text-muted-foreground focus:border-border-strong focus:outline-none"
+            />
+            <textarea
+              rows={2}
+              placeholder="Optional note (what was done, how to review it…)"
+              value={deliveryNoteInput}
+              onChange={(e) => setDeliveryNoteInput(e.target.value)}
+              className="w-full resize-none rounded-md border border-border bg-surface px-2.5 py-1.5 text-xs text-foreground placeholder:text-muted-foreground focus:border-border-strong focus:outline-none"
+            />
+            <div className="flex gap-2">
+              <button
+                onClick={handleSubmit}
+                disabled={isSubmitting}
+                className="inline-flex items-center gap-1 rounded-lg bg-foreground px-3 py-1.5 text-xs font-medium text-background transition-opacity hover:opacity-90 disabled:opacity-40"
+              >
+                {isSubmitting ? "Submitting…" : "Confirm submission"}
+                <HugeiconsIcon icon={ArrowRight02Icon} size={11} strokeWidth={2} />
+              </button>
+              <button
+                onClick={() => setShowSubmitForm(false)}
+                className="rounded-lg border border-border px-3 py-1.5 text-xs text-muted-foreground hover:text-foreground"
+              >
+                Cancel
+              </button>
+            </div>
+          </div>
+        )}
       </div>
 
       <div className="flex shrink-0 gap-2 flex-wrap">
@@ -402,13 +470,12 @@ function MilestoneCard({
             <HugeiconsIcon icon={ArrowRight02Icon} size={11} strokeWidth={2} />
           </button>
         )}
-        {canSubmit && (
+        {canSubmit && !showSubmitForm && (
           <button
-            onClick={handleSubmit}
-            disabled={isSubmitting}
-            className="inline-flex items-center gap-1 rounded-lg bg-foreground px-3 py-1.5 text-xs font-medium text-background transition-opacity hover:opacity-90 disabled:opacity-40"
+            onClick={() => setShowSubmitForm(true)}
+            className="inline-flex items-center gap-1 rounded-lg bg-foreground px-3 py-1.5 text-xs font-medium text-background transition-opacity hover:opacity-90"
           >
-            {isSubmitting ? "…" : "Submit work"}
+            Submit work
             <HugeiconsIcon icon={ArrowRight02Icon} size={11} strokeWidth={2} />
           </button>
         )}
@@ -432,13 +499,11 @@ function FheInfoBanner({ role }: { role: EscrowRole }) {
   return (
     <div className="mb-4 rounded-lg border border-border bg-surface/50 px-4 py-3">
       <p className="text-xs text-muted-foreground">
-        <span className="font-medium text-foreground">FHE-encrypted</span> —
-        amounts are stored as{" "}
-        <span className="font-mono">euint64</span> ciphertexts on Zama fhEVM.{" "}
+        <span className="font-medium text-foreground">Amounts are private.</span>{" "}
         {role === "auditor"
-          ? "Your address has been granted decryption rights via the on-chain ACL."
-          : "Click the lock icon next to any amount to decrypt it via the Zama relayer — your wallet will sign a one-time EIP-712 proof."}{" "}
-        Only authorized parties (client, contractor, auditor) can reveal values.
+          ? "You have been granted read access to this contract. Click the lock icon next to any amount to reveal it — your wallet will confirm the request."
+          : "Click the lock icon next to any amount to reveal it. Your wallet will confirm the request, and only you will see the value."
+        }
       </p>
     </div>
   );
@@ -462,6 +527,17 @@ export default function ContractDetail({
   const queryClient = useQueryClient();
 
   const numericId = /^\d+$/.test(id) ? BigInt(id) : undefined;
+
+  const [meta, setMeta] = useState<EscrowMeta | null>(null);
+  useEffect(() => {
+    if (numericId !== undefined) setMeta(loadEscrowMeta(numericId));
+  }, [numericId]);
+
+  const handleDelivered = (milestoneIndex: number, note: string, url: string) => {
+    if (numericId === undefined) return;
+    saveMilestoneDelivery(numericId, milestoneIndex, { note, url });
+    setMeta(loadEscrowMeta(numericId));
+  };
 
   const {
     data: escrowInfo,
@@ -487,19 +563,8 @@ export default function ContractDetail({
   const isAuthorized =
     role === "client" || role === "contractor" || role === "auditor";
 
-  // Plain balances for reference display
-  const totalWei = balances?.[0] as bigint | undefined;
-  const releasedWei = balances?.[1] as bigint | undefined;
   const pendingWithdrawalWei = balances?.[2] as bigint | undefined;
 
-  const plainTotalEth =
-    totalWei && totalWei > BigInt(0)
-      ? Number(formatEther(totalWei)).toFixed(4)
-      : null;
-  const plainReleasedEth =
-    releasedWei && releasedWei > BigInt(0)
-      ? Number(formatEther(releasedWei)).toFixed(4)
-      : null;
   const pendingWithdrawalEth =
     pendingWithdrawalWei && pendingWithdrawalWei > BigInt(0)
       ? Number(formatEther(pendingWithdrawalWei)).toFixed(4)
@@ -524,9 +589,12 @@ export default function ContractDetail({
             <div className="text-xs uppercase tracking-[0.22em] text-muted-foreground">
               Contract
             </div>
-            <h1 className="font-display mt-1 font-mono text-xl font-medium">
-              #{id}
+            <h1 className="font-display mt-1 text-xl font-medium">
+              {meta?.title ?? `#${id}`}
             </h1>
+            {meta?.title && (
+              <span className="text-xs text-muted-foreground font-mono">#{id}</span>
+            )}
           </div>
         </div>
 
@@ -570,6 +638,15 @@ export default function ContractDetail({
 
             <FheInfoBanner role={role} />
 
+            {meta?.scopeOfWork && (
+              <div className="mb-4 rounded-xl border border-border bg-surface p-5">
+                <p className="text-xs uppercase tracking-wider text-muted-foreground mb-2">
+                  Scope of work
+                </p>
+                <p className="text-sm text-foreground whitespace-pre-wrap">{meta.scopeOfWork}</p>
+              </div>
+            )}
+
             <div className="mb-6 rounded-xl border border-border bg-surface p-6">
               <div className="flex items-center justify-between border-b border-border pb-4 mb-4">
                 <div className="flex items-center gap-3">
@@ -600,11 +677,6 @@ export default function ContractDetail({
                     size="md"
                     symbol="ETH"
                   />
-                  {plainTotalEth && (
-                    <p className="text-[10px] text-muted-foreground/50">
-                      {plainTotalEth} ETH deposited
-                    </p>
-                  )}
                 </div>
 
                 <div className="space-y-1.5">
@@ -619,11 +691,6 @@ export default function ContractDetail({
                     size="md"
                     symbol="ETH"
                   />
-                  {plainReleasedEth && (
-                    <p className="text-[10px] text-muted-foreground/50">
-                      {plainReleasedEth} ETH released
-                    </p>
-                  )}
                 </div>
 
                 <div className="space-y-1.5">
@@ -689,7 +756,11 @@ export default function ContractDetail({
                     role={role}
                     escrowStatus={statusNum ?? EscrowStatus.Pending}
                     userAddress={address}
+                    description={meta?.milestones[i]?.description}
+                    deliveryNote={meta?.milestones[i]?.deliveryNote}
+                    deliveryUrl={meta?.milestones[i]?.deliveryUrl}
                     onRefetch={handleRefetch}
+                    onDelivered={handleDelivered}
                   />
                 ))}
               </div>
