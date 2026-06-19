@@ -53,7 +53,7 @@ function Nav() {
           <a href="#how" className="transition-colors hover:text-foreground">How it works</a>
           <a href="#freelancers" className="transition-colors hover:text-foreground">For Freelancers</a>
           <a href="#enterprise" className="transition-colors hover:text-foreground">For Enterprise</a>
-          <a href="#docs" className="transition-colors hover:text-foreground">Docs</a>
+          <Link href="/docs" className="transition-colors hover:text-foreground">Docs</Link>
         </nav>
         <Link
           href="/app/dashboard"
@@ -106,12 +106,12 @@ function Hero() {
               Create Escrow
               <HugeiconsIcon icon={ArrowRight02Icon} size={14} strokeWidth={2} />
             </Link>
-            <a
-              href="#docs"
+            <Link
+              href="/docs"
               className="inline-flex items-center gap-2 rounded-lg border border-border px-5 py-3 text-sm font-medium text-foreground transition-colors hover:border-border-strong"
             >
               Read the Docs
-            </a>
+            </Link>
           </div>
           {/*
           <div className="mt-14 flex flex-wrap items-center justify-center gap-x-8 gap-y-3 text-xs text-muted-foreground">
@@ -349,12 +349,12 @@ function Cta() {
                   Create Escrow
                   <HugeiconsIcon icon={ArrowRight02Icon} size={14} strokeWidth={2} />
                 </Link>
-                <a
-                  href="#docs"
+                <Link
+                  href="/docs"
                   className="inline-flex items-center gap-2 rounded-lg border border-border-strong px-5 py-3 text-sm font-medium transition-colors hover:bg-background/40"
                 >
                   Read the Docs
-                </a>
+                </Link>
               </div>
             </div>
           </div>
@@ -387,7 +387,7 @@ function Footer() {
         </div>
         <div className="grid grid-cols-2 gap-8 text-sm sm:grid-cols-4 md:justify-self-end">
           {[
-            { label: "Docs", href: "#" },
+            { label: "Docs", href: "/docs" },
             { label: "GitHub", href: "#" },
             { label: "X / Twitter", href: "#" },
             { label: "Sepolia Explorer", href: "https://sepolia.etherscan.io" },
