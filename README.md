@@ -1,10 +1,22 @@
+<div align="center">
+
+<img width="100" height="100" alt="ShieldFlow Logo" src="https://github.com/user-attachments/assets/9c1384f3-0c34-442b-89a0-faefd1701791" />
+
 # ShieldFlow
 
 **Confidential milestone escrow on Ethereum, powered by Zama fhEVM.**
 
 ShieldFlow lets a client lock ETH into a milestone-based escrow where every amount — total deposit, per-milestone allocation, and running released balance — is stored as an FHE-encrypted ciphertext on-chain. Only the authorized client, contractor, or auditor can decrypt them. Third parties and blockchain explorers see nothing but opaque handles.
 
-Built for the **Zama Season 3** hackathon.
+[![Built for Zama Season 3](https://img.shields.io/badge/Zama-Season%203%20Hackathon-blue?style=flat-square)](https://www.zama.ai/)
+[![Solidity](https://img.shields.io/badge/Solidity-0.8.24-363636?style=flat-square&logo=solidity)](https://soliditylang.org/)
+[![Network](https://img.shields.io/badge/Network-Sepolia-orange?style=flat-square)](https://sepolia.etherscan.io/address/0xF6105e05B9d8cB39151F56b1e4AA411C8F2bF621)
+[![Tests](https://img.shields.io/badge/Tests-20%20passing-brightgreen?style=flat-square)](#tests)
+[![License](https://img.shields.io/badge/License-MIT%20%2F%20BSD--3--Clause-lightgrey?style=flat-square)](./LICENSE)
+
+[Contract on Etherscan](https://sepolia.etherscan.io/address/0xF6105e05B9d8cB39151F56b1e4AA411C8F2bF621) · [Frontend](#running-locally) · [Tests](#tests)
+
+</div>
 
 ---
 
