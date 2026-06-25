@@ -10,7 +10,12 @@ import {
 import { ContractorEscrowsBanner } from "@/components/contractor-escrows-banner";
 
 export default function ContractsList() {
-  const { data: escrows = [], isLoading } = useUserEscrows();
+  const {
+    data: escrows = [],
+    isLoading,
+    isError,
+    error,
+  } = useUserEscrows();
 
   return (
     <div className="p-8 md:p-12">
@@ -44,6 +49,11 @@ export default function ContractsList() {
             {isLoading ? (
               <p className="px-5 py-8 text-sm text-muted-foreground">
                 Loading escrows from Sepolia…
+              </p>
+            ) : isError ? (
+              <p className="px-5 py-8 text-sm text-destructive">
+                Failed to load escrows:{" "}
+                {error instanceof Error ? error.message : "RPC request failed"}
               </p>
             ) : escrows.length === 0 ? (
               <p className="px-5 py-8 text-sm text-muted-foreground">

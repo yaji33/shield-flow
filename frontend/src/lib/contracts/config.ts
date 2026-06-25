@@ -1,19 +1,21 @@
-import { createConfig, http } from "wagmi";
+import { createConfig, http, type Config } from "wagmi";
 import { sepolia } from "wagmi/chains";
 
-const upstreamRpc =
-  process.env.NEXT_PUBLIC_ALCHEMY_RPC_URL ??
-  "https://ethereum-sepolia-rpc.publicnode.com";
+// All client reads go through same-origin proxy. COEP (required for FHE WASM)
+// blocks cross-origin fetch to Alchemy/public RPC endpoints from the browser.
+const sepoliaRpc = "/api/rpc";
 
-// Browser reads must go through same-origin proxy: COEP (required for FHE WASM)
-// blocks cross-origin fetch to Alchemy/public RPC endpoints.
-const sepoliaRpc =
-  typeof window === "undefined" ? upstreamRpc : "/api/rpc";
+let wagmiConfig: Config | undefined;
 
-export const wagmiConfig = createConfig({
-  chains: [sepolia],
-  ssr: true,
-  transports: {
-    [sepolia.id]: http(sepoliaRpc),
-  },
-});
+export function getWagmiConfig(): Config {
+  if (!wagmiConfig) {
+    wagmiConfig = createConfig({
+      chains: [sepolia],
+      ssr: false,
+      transports: {
+        [sepolia.id]: http(sepoliaRpc),
+      },
+    });
+  }
+  return wagmiConfig;
+}
