@@ -150,7 +150,11 @@ export default function CreateEscrow() {
         throw new Error("Public client unavailable");
       }
 
-      const receipt = await publicClient.waitForTransactionReceipt({ hash });
+      const receipt = await publicClient.waitForTransactionReceipt({
+        hash,
+        pollingInterval: 2_000,
+        timeout: 600_000,
+      });
       if (receipt.status !== "success") {
         throw new Error("Create escrow transaction failed");
       }
@@ -182,6 +186,15 @@ export default function CreateEscrow() {
         { id: createToast },
       );
     } catch (error) {
+      if (isReceiptTimeoutError(error)) {
+        toast.error(
+          "Transaction was submitted but confirmation is taking longer than expected. Check Etherscan, then refresh in a minute.",
+          { id: createToast },
+        );
+        setSubmitPhase("idle");
+        return;
+      }
+
       const message = getContractErrorMessage(error);
       if (message === "Transaction cancelled.") {
         toast.dismiss(createToast);
@@ -219,7 +232,7 @@ export default function CreateEscrow() {
               const isActive = step === s.n;
               const isLast = idx === STEPS.length - 1;
               return (
-                <div key={s.n} className="flex flex-1 flex-col last:flex-none">
+                <div key={s.n} className={cn("flex flex-col", isLast ? "shrink-0" : "flex-1")}>
                   <div className="flex items-center">
                     <button
                       type="button"
@@ -643,6 +656,21 @@ export default function CreateEscrow() {
                     </p>
                   );
                 })()}
+                {txHash && submitPhase === "idle" && escrowId === null && (
+                  <div className="rounded-lg border border-amber-500/30 bg-amber-500/10 px-3 py-2 text-xs text-amber-100">
+                    Transaction submitted:
+                    {" "}
+                    <a
+                      href={`https://sepolia.etherscan.io/tx/${txHash}`}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="underline underline-offset-2 hover:opacity-90"
+                    >
+                      view on Etherscan
+                    </a>
+                    . If it is confirmed there, refresh this page and open the escrow from your dashboard.
+                  </div>
+                )}
 
                 <div className="flex gap-3">
                   <button
@@ -682,4 +710,14 @@ function decodeEscrowCreatedLog(log: {
 
   if (decoded.eventName !== "EscrowCreated") return null;
   return decoded.args.escrowId as bigint;
+}
+
+function isReceiptTimeoutError(error: unknown): boolean {
+  if (!(error instanceof Error)) return false;
+  const message = error.message.toLowerCase();
+  return (
+    message.includes("timed out") ||
+    message.includes("timeout") ||
+    message.includes("waitfortransactionreceipt")
+  );
 }

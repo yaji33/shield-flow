@@ -25,7 +25,7 @@ export function WalletConnect() {
     switchToSepolia,
     disconnect,
     connectError,
-  } = useWallet();
+  } = useWallet();   
 
   const [open, setOpen] = useState(false);
 
