@@ -12,6 +12,15 @@ function getUpstreamRpc(): string {
       "RPC URL must be a full HTTPS URL (e.g. https://eth-sepolia.g.alchemy.com/v2/YOUR_KEY)",
     );
   }
+  if (
+    url.includes("eth-mainnet") ||
+    url.includes("polygon-mainnet") ||
+    url.includes("opt-mainnet")
+  ) {
+    throw new Error(
+      "RPC URL must point to Sepolia (https://eth-sepolia.g.alchemy.com/v2/YOUR_KEY), not Mainnet.",
+    );
+  }
   return url;
 }
 

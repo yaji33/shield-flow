@@ -54,6 +54,22 @@ function shortAddress(address: Address) {
   return `${address.slice(0, 6)}…${address.slice(-4)}`;
 }
 
+async function assertSepoliaContract(publicClient: PublicClient) {
+  const chainId = await publicClient.getChainId();
+  if (chainId !== sepolia.id) {
+    throw new Error(
+      `RPC is connected to chain ${chainId}, not Sepolia (${sepolia.id}). In Vercel, set NEXT_PUBLIC_ALCHEMY_RPC_URL to https://eth-sepolia.g.alchemy.com/v2/YOUR_KEY`,
+    );
+  }
+
+  const code = await publicClient.getBytecode({ address: CONTRACT_ADDRESS });
+  if (!code || code === "0x") {
+    throw new Error(
+      `ShieldFlow contract not found at ${CONTRACT_ADDRESS} on this RPC. Your Alchemy URL is likely Mainnet — use https://eth-sepolia.g.alchemy.com/v2/YOUR_KEY`,
+    );
+  }
+}
+
 async function fetchEscrowIdsForUser(
   publicClient: PublicClient,
   userAddress: Address,
@@ -207,6 +223,7 @@ export function useUserEscrows() {
     queryKey: ["userEscrows", address, sepolia.id],
     queryFn: async () => {
       if (!publicClient || !address) return [];
+      await assertSepoliaContract(publicClient);
       return fetchUserEscrowRows(publicClient, address);
     },
     enabled: Boolean(isConnected && address && publicClient),
